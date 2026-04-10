@@ -1,0 +1,45 @@
+name: project-radiant
+
+services:
+  misp:
+    build:
+      context: ./misp
+    image: project-radiant-misp:latest
+    container_name: project-radiant-misp
+    env_file:
+      - .env
+    ports:
+      - "${MISP_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./misp/config:/var/www/MISP/app/Config:ro
+      - ./logs/misp:/var/log/misp
+    restart: unless-stopped
+    networks:
+      - radiant
+
+  suricata:
+    build:
+      context: ./suricata
+    image: project-radiant-suricata:latest
+    container_name: project-radiant-suricata
+    env_file:
+      - .env
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    command:
+      - suricata
+      - -c
+      - /etc/suricata/suricata.yaml
+      - -i
+      - eth0
+    volumes:
+      - ./suricata/rules:/etc/suricata/rules:ro
+      - ./logs/suricata:/var/log/suricata
+    restart: unless-stopped
+    networks:
+      - radiant
+
+networks:
+  radiant:
+    driver: bridge

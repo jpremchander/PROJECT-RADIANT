@@ -1,0 +1,1 @@
+alert http any any -> any any (msg:"PROJECT-RADIANT test traffic"; flow:to_server,established; http.uri; content:"/radiant-test"; nocase; sid:1000001; rev:1;)
