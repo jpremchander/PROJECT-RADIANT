@@ -1,0 +1,76 @@
+name: project-radiant-monitoring
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: radiant-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+    restart: unless-stopped
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - monitoring
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: radiant-kibana
+    depends_on:
+      - elasticsearch
+    environment:
+      - ELASTICSEARCH_HOSTS=${ELASTICSEARCH_HOSTS:-http://elasticsearch:9200}
+      - SERVER_PUBLICBASEURL=${KIBANA_PUBLIC_BASE_URL:-http://localhost:5601}
+    ports:
+      - "5601:5601"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  fluent-bit:
+    image: cr.fluentbit.io/fluent/fluent-bit:3.1
+    container_name: radiant-fluent-bit
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ../logs/suricata:/var/log/suricata:ro
+      - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  n8n:
+    image: n8nio/n8n:1.63.4
+    container_name: radiant-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - TZ=${N8N_TIMEZONE:-UTC}
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_SECURE_COOKIE=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  elasticsearch_data:
+  n8n_data:
