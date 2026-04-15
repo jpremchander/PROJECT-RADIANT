@@ -20,7 +20,7 @@ services:
       - -i
       - ${SURICATA_CAPTURE_IFACE}
     volumes:
+      - ./suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
       - ./suricata/rules:/etc/suricata/rules:ro
       - ./logs/suricata:/var/log/suricata
     restart: unless-stopped
-
