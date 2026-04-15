@@ -1,1 +1,5 @@
-alert http any any -> any any (msg:"PROJECT-RADIANT test traffic"; flow:to_server,established; http.uri; content:"/radiant-test"; nocase; sid:1000001; rev:1;)
+alert icmp any any -> $HOME_NET any (msg:"PROJECT-RADIANT ICMP activity to lab host"; sid:1000001; rev:1;)
+
+alert http any any -> $HOME_NET any (msg:"PROJECT-RADIANT HTTP test request"; flow:to_server,established; http.uri; content:"/radiant-test"; nocase; sid:1000002; rev:1;)
+
+alert dns any any -> any any (msg:"PROJECT-RADIANT DNS request observed"; dns.query; sid:1000003; rev:1;)

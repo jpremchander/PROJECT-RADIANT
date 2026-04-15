@@ -14,4 +14,4 @@ COPY rules/ /etc/suricata/rules/
 
 RUN mkdir -p /var/log/suricata
 
-CMD ["suricata", "-c", "/etc/suricata/suricata.yaml", "-i", "eth0"]
+CMD ["suricata", "-c", "/etc/suricata/suricata.yaml"]

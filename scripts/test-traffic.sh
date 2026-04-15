@@ -2,15 +2,15 @@
 
 set -eu
 
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+TARGET_IP="${1:-192.168.50.10}"
 
-cd "$ROOT_DIR"
+printf 'Pinging %s to generate ICMP traffic...\n' "$TARGET_IP"
+ping -c 4 "$TARGET_IP" || true
 
-NETWORK_NAME=${COMPOSE_PROJECT_NAME:-project-radiant}_radiant
-TEST_URL=http://misp/radiant-test?source=project-radiant
+printf 'Sending HTTP test request to http://%s:8080/radiant-test ...\n' "$TARGET_IP"
+curl -fsS "http://$TARGET_IP:8080/radiant-test?source=project-radiant" >/dev/null || true
 
-printf 'Sending test request to %s\n' "$TEST_URL"
+printf 'Generating DNS traffic...\n'
+nslookup example.com >/dev/null 2>&1 || true
 
-docker run --rm --network "$NETWORK_NAME" curlimages/curl:8.10.1 -fsS "$TEST_URL" >/dev/null
-
-printf 'Test traffic sent. Check Suricata logs in logs/suricata/eve.json for the alert.\n'
+printf 'Done. Check logs/suricata/eve.json and logs/suricata/fast.log\n'
