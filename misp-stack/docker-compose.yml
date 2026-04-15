@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  misp-db:
+    image: mariadb:10.11
+    container_name: misp-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - misp_db_data:/var/lib/mysql
+
+  misp-redis:
+    image: redis:7-alpine
+    container_name: misp-redis
+    restart: unless-stopped
+
+  misp:
+    image: ghcr.io/misp/misp-docker/misp-core:latest
+    container_name: misp
+    restart: unless-stopped
+    depends_on:
+      - misp-db
+      - misp-redis
+    ports:
+      - "8080:80"
+      - "8443:443"
+    environment:
+      MYSQL_HOST: misp-db
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: misp-redis
+      BASE_URL: ${MISP_BASEURL}
+      MISP_ADMIN_EMAIL: ${MISP_ADMIN_EMAIL}
+      MISP_ADMIN_PASSWORD: ${MISP_ADMIN_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - misp_app_data:/var/www/MISP
+
+volumes:
+  misp_db_data:
+  misp_app_data:
