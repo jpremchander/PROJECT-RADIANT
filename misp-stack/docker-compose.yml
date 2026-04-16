@@ -39,6 +39,11 @@ services:
       MISP_ADMIN_EMAIL: ${MISP_ADMIN_EMAIL}
       MISP_ADMIN_PASSWORD: ${MISP_ADMIN_PASSWORD}
       TZ: ${TZ}
+
+      # ✅ FIX FOR YOUR ISSUE (VERY IMPORTANT)
+      MISP_TRUSTED_PROXIES: 0.0.0.0/0
+      SECURITY_ASSUME_SECURE_PROTOCOL: "true"
+
     volumes:
       - misp_app_data:/var/www/MISP
 
