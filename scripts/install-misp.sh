@@ -70,13 +70,36 @@ python3 -m venv "$MISP_PATH/venv"
 # ── Step 7: MISP configuration ───────────────────────────────────────────────
 echo "==> [7/9] Writing MISP config..."
 cd "$MISP_PATH/app/Config"
-for f in database core bootstrap; do
-    [ -f "${f}.php" ] || cp "${f}.php.default" "${f}.php"
-done
 
 SALT=$(openssl rand -hex 32)
 UUID=$(cat /proc/sys/kernel/random/uuid)
 CIPHER=$(openssl rand -hex 16)
+
+cat > "$MISP_PATH/app/Config/database.php" <<PHP
+<?php
+class DATABASE_CONFIG {
+    public \$default = array(
+        'datasource' => 'Database/Mysql',
+        'persistent' => false,
+        'host'       => 'localhost',
+        'login'      => '${MISP_DB_USER}',
+        'password'   => '${MISP_DB_PASS}',
+        'database'   => '${MISP_DB}',
+        'prefix'     => '',
+        'encoding'   => 'utf8mb4',
+    );
+}
+PHP
+
+cat > "$MISP_PATH/app/Config/bootstrap.php" <<'PHP'
+<?php
+require_once dirname(__FILE__) . DS . 'bootstrap.default.php';
+PHP
+
+cat > "$MISP_PATH/app/Config/core.php" <<'PHP'
+<?php
+require_once dirname(__FILE__) . DS . 'core.default.php';
+PHP
 
 cat > "$MISP_PATH/app/Config/config.php" <<PHP
 <?php
@@ -101,11 +124,6 @@ class CONFIG {
                       'user' => null, 'password' => null];
 }
 PHP
-
-sed -i \
-    -e "s/'db_login'/'${MISP_DB_USER}'/" \
-    -e "s/'db_password'/'${MISP_DB_PASS}'/" \
-    "$MISP_PATH/app/Config/database.php"
 
 # ── Step 8: Permissions + Apache + SSL ───────────────────────────────────────
 echo "==> [8/9] Apache, SSL and permissions..."
