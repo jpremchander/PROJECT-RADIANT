@@ -194,18 +194,19 @@ systemctl restart apache2
 # ── 9. DB schema + credentials ────────────────────────────────────────────────
 echo "==> [9/9] Initialising database and credentials..."
 
+# Import base schema (creates default admin@admin.test user)
 mysql -u "$MISP_DB_USER" -p"$MISP_DB_PASS" "$MISP_DB" \
     < "$MISP_PATH/INSTALL/MYSQL.sql" 2>/dev/null || true
 
-CAKE="$MISP_PATH/app/Console/cake"
-sudo -u www-data "$CAKE" Admin runUpdates
-sudo -u www-data "$CAKE" Admin setSetting "MISP.baseurl" "$MISP_BASEURL"
-sudo -u www-data "$CAKE" Admin setSetting "MISP.org"     "$MISP_ORG"
-sudo -u www-data "$CAKE" Admin setSetting "MISP.live"    1
+# Generate bcrypt password hash via PHP (bypasses cake/PHP8 Attribute conflict)
+HASH=$(php -r "echo password_hash('${MISP_ADMIN_PASS}', PASSWORD_DEFAULT);")
 
-mysql -u root "$MISP_DB" \
-    -e "UPDATE users SET email='${MISP_ADMIN_EMAIL}', change_pw=0 WHERE id=1;"
-sudo -u www-data "$CAKE" User changePw "$MISP_ADMIN_EMAIL" "$MISP_ADMIN_PASS"
+# Set admin email, password and disable forced password change
+mysql -u root "$MISP_DB" <<SQL
+UPDATE users SET email='${MISP_ADMIN_EMAIL}', password='${HASH}', change_pw=0 WHERE id=1;
+SQL
+
+echo "    Admin credentials set: ${MISP_ADMIN_EMAIL} / ${MISP_ADMIN_PASS}"
 
 echo ""
 echo "======================================================"
