@@ -1,0 +1,77 @@
+name: project-radiant-misp
+
+services:
+  db:
+    image: mariadb:10.11
+    container_name: misp-db
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-misp}
+      MYSQL_USER: ${MYSQL_USER:-misp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-misp}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-misproot}
+    volumes:
+      - misp-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: misp-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  misp-core:
+    image: ghcr.io/misp/misp-docker/misp-core:latest
+    container_name: misp-core
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8090:80"
+      - "8445:443"
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-misp}
+      MYSQL_USER: ${MYSQL_USER:-misp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-misp}
+      REDIS_FQDN: redis
+      MISP_BASEURL: ${MISP_BASEURL:-http://localhost:8090}
+      MISP_UUID: ${MISP_UUID:-}
+      MISP_ORG: ${MISP_ORG:-RADIANT}
+      MISP_HOST_ORG_ID: "1"
+      MISP_EMAIL: ${MISP_EMAIL:-admin@radiant.local}
+      SECURITY_SALT: ${SECURITY_SALT:-Th1sIsAR4nd0mS4ltF0rR4d14ntPr0j3ct}
+      WORKERS: "1"
+    volumes:
+      - misp-data:/var/www/MISP/app/files
+      - misp-logs:/var/www/MISP/app/tmp/logs
+    restart: unless-stopped
+
+  misp-modules:
+    image: ghcr.io/misp/misp-docker/misp-modules:latest
+    container_name: misp-modules
+    environment:
+      REDIS_BACKEND: redis
+      REDIS_PORT: "6379"
+      REDIS_DATABASE: "245"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  misp-db:
+  misp-data:
+  misp-logs:
