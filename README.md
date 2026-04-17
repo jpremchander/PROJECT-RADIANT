@@ -22,19 +22,23 @@ MISP (native on Ubuntu)
 
 ```text
 PROJECT-RADIANT/
-├── .env                      # Suricata environment variables
-├── docker-compose.yml        # Suricata container
+├── .env                           # Suricata environment variables
+├── docker-compose.yml             # Suricata container
 ├── suricata/
 │   ├── Dockerfile
 │   ├── suricata.yaml
 │   └── rules/local.rules
 ├── scripts/
-│   ├── install-misp.sh       # Native MISP install + RADIANT credentials
-│   ├── start.sh              # Start Suricata container
-│   ├── test-traffic.sh       # Generate test LAN traffic
-│   └── tail-alerts.sh        # Tail Suricata alert logs
+│   ├── install-misp.sh            # Native MISP install + RADIANT credentials
+│   ├── reset-misp-credentials.sh  # Reset MISP admin password
+│   ├── start.sh                   # Start Suricata container
+│   ├── complete-radiant.sh        # Full demo: IOC → rule → attack → detection
+│   ├── test-traffic.sh            # Generate test LAN traffic
+│   ├── tail-alerts.sh             # Tail Suricata alert logs
+│   ├── ai-classify-alerts.py      # AI alert classification (Claude)
+│   └── ai-generate-rules.py       # AI Suricata rule generation from MISP IOCs
 └── logs/
-    └── suricata/             # Suricata alert output (host-mounted)
+    └── suricata/                  # Suricata alert output (host-mounted)
 ```
 
 ---
@@ -100,6 +104,37 @@ Alerts appear in `logs/suricata/fast.log` and `logs/suricata/eve.json`.
 4. Copy rules to `suricata/rules/local.rules`
 5. Restart Suricata: `./scripts/start.sh`
 6. Simulate traffic and confirm alerts fire
+
+---
+
+## 5. AI Alert Classification
+
+Classifies recent Suricata alerts with Claude AI (severity, category, recommended action):
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+python3 scripts/ai-classify-alerts.py
+python3 scripts/ai-classify-alerts.py --limit 20   # classify last 20 alerts
+```
+
+## 6. AI Rule Generation
+
+Generates Suricata rules from MISP IOCs using Claude AI:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Auto-fetch IOCs from MISP database
+python3 scripts/ai-generate-rules.py
+
+# Provide IOCs manually
+python3 scripts/ai-generate-rules.py --iocs domain:evil.com ip:1.2.3.4 url:http://bad.io/x
+
+# Append AI rules to existing rules file
+python3 scripts/ai-generate-rules.py --append
+```
+
+Requires: `pip install anthropic`
 
 ---
 
