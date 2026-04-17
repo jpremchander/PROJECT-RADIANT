@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # ── Credentials ───────────────────────────────────────────────────────────────
-MISP_BASEURL="https://192.168.50.100"
+MISP_BASEURL="http://192.168.50.100"
 MISP_ORG="RADIANT"
 MISP_ADMIN_EMAIL="admin@radiant.local"
 MISP_ADMIN_PASS="Rad14nt@2024"
@@ -156,24 +156,10 @@ chown -R www-data:www-data "$MISP_PATH"
 find "$MISP_PATH" -type d -exec chmod 750 {} \;
 chmod -R 770 "$MISP_PATH/app/tmp" "$MISP_PATH/app/files"
 
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/ssl/private/misp.key \
-    -out    /etc/ssl/certs/misp.crt \
-    -subj "/CN=192.168.50.100/O=RADIANT/C=US" 2>/dev/null
-
 cat > /etc/apache2/sites-available/misp.conf <<'CONF'
 <VirtualHost *:80>
     ServerName 192.168.50.100
-    Redirect permanent / https://192.168.50.100/
-</VirtualHost>
-
-<VirtualHost *:443>
-    ServerName 192.168.50.100
     DocumentRoot /var/www/MISP/app/webroot
-
-    SSLEngine on
-    SSLCertificateFile    /etc/ssl/certs/misp.crt
-    SSLCertificateKeyFile /etc/ssl/private/misp.key
 
     <Directory /var/www/MISP/app/webroot>
         Options -Indexes
@@ -188,7 +174,7 @@ CONF
 
 a2dissite 000-default 2>/dev/null || true
 a2ensite misp
-a2enmod ssl rewrite headers
+a2enmod rewrite headers
 systemctl restart apache2
 
 # ── 9. DB schema + credentials ────────────────────────────────────────────────
