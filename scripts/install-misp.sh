@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-# ── Project credentials ───────────────────────────────────────────────────────
+# ── Credentials ───────────────────────────────────────────────────────────────
 MISP_BASEURL="https://192.168.50.100"
 MISP_ORG="RADIANT"
 MISP_ADMIN_EMAIL="admin@radiant.local"
@@ -13,7 +13,6 @@ MISP_DB="misp"
 MISP_DB_USER="misp"
 MISP_DB_PASS="misp_rad14nt_2024"
 
-# ── Pre-flight ────────────────────────────────────────────────────────────────
 if [ "$(id -u)" -ne 0 ]; then
     echo "Error: run as root — sudo bash scripts/install-misp.sh" >&2
     exit 1
@@ -21,20 +20,20 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-# ── Step 1: System packages ───────────────────────────────────────────────────
+# ── 1. Packages ───────────────────────────────────────────────────────────────
 echo "==> [1/9] Installing packages..."
 apt-get update -qq
 apt-get install -y \
     apache2 mariadb-server redis-server \
-    git curl wget \
+    git curl wget openssl \
     php8.3 php8.3-cli php8.3-common php8.3-mysql \
     php8.3-xml php8.3-mbstring php8.3-curl php8.3-intl \
     php8.3-bcmath php8.3-gd php8.3-zip \
     php-redis libapache2-mod-php8.3 \
     python3 python3-pip python3-venv python3-dev \
-    libfuzzy-dev ssdeep openssl
+    libfuzzy-dev ssdeep
 
-# ── Step 2: MariaDB ───────────────────────────────────────────────────────────
+# ── 2. MariaDB ────────────────────────────────────────────────────────────────
 echo "==> [2/9] Configuring MariaDB..."
 systemctl start mariadb
 systemctl enable mariadb
@@ -45,31 +44,39 @@ GRANT ALL ON \`${MISP_DB}\`.* TO '${MISP_DB_USER}'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 
-# ── Step 3: Redis ─────────────────────────────────────────────────────────────
+# ── 3. Redis ──────────────────────────────────────────────────────────────────
 echo "==> [3/9] Enabling Redis..."
 systemctl start redis-server
 systemctl enable redis-server
 
-# ── Step 4: Clone MISP ───────────────────────────────────────────────────────
-echo "==> [4/9] Cloning MISP (this may take a few minutes)..."
-git clone -b 2.4 --depth 1 https://github.com/MISP/MISP.git "$MISP_PATH"
-cd "$MISP_PATH"
-git submodule update --init --recursive
+# ── 4. Clone MISP (skip if already present) ───────────────────────────────────
+echo "==> [4/9] Cloning MISP..."
+if [ -d "$MISP_PATH/.git" ]; then
+    echo "    MISP already cloned — skipping."
+else
+    rm -rf "$MISP_PATH"
+    git clone -b 2.4 --depth 1 https://github.com/MISP/MISP.git "$MISP_PATH"
+    cd "$MISP_PATH"
+    git submodule update --init --recursive
+fi
 
-# ── Step 5: PHP Composer dependencies ────────────────────────────────────────
+# ── 5. PHP Composer ───────────────────────────────────────────────────────────
 echo "==> [5/9] Installing PHP dependencies..."
 cd "$MISP_PATH/app"
-wget -qO composer.phar https://getcomposer.org/download/latest-stable/composer.phar
+if [ ! -f composer.phar ]; then
+    wget -qO composer.phar https://getcomposer.org/download/latest-stable/composer.phar
+fi
 php composer.phar install --no-dev --no-interaction 2>/dev/null || true
 
-# ── Step 6: Python dependencies ──────────────────────────────────────────────
+# ── 6. Python deps ────────────────────────────────────────────────────────────
 echo "==> [6/9] Installing Python dependencies..."
-python3 -m venv "$MISP_PATH/venv"
+if [ ! -d "$MISP_PATH/venv" ]; then
+    python3 -m venv "$MISP_PATH/venv"
+fi
 "$MISP_PATH/venv/bin/pip" install -q PyMISP pyzmq redis 2>/dev/null || true
 
-# ── Step 7: MISP configuration ───────────────────────────────────────────────
-echo "==> [7/9] Writing MISP config..."
-cd "$MISP_PATH/app/Config"
+# ── 7. Write config files directly ───────────────────────────────────────────
+echo "==> [7/9] Writing MISP config files..."
 
 SALT=$(openssl rand -hex 32)
 UUID=$(cat /proc/sys/kernel/random/uuid)
@@ -125,17 +132,22 @@ class CONFIG {
 }
 PHP
 
-# ── Step 8: Permissions + Apache + SSL ───────────────────────────────────────
-echo "==> [8/9] Apache, SSL and permissions..."
+# ── 8. Permissions + Apache + SSL ─────────────────────────────────────────────
+echo "==> [8/9] Permissions, Apache and SSL..."
 
-mkdir -p "$MISP_PATH/app/tmp/logs" "$MISP_PATH/app/files/scripts/tmp"
+mkdir -p "$MISP_PATH/app/tmp/logs" \
+         "$MISP_PATH/app/tmp/cache/models" \
+         "$MISP_PATH/app/tmp/cache/persistent" \
+         "$MISP_PATH/app/tmp/cache/views" \
+         "$MISP_PATH/app/files/scripts/tmp"
+
 chown -R www-data:www-data "$MISP_PATH"
 find "$MISP_PATH" -type d -exec chmod 750 {} \;
 chmod -R 770 "$MISP_PATH/app/tmp" "$MISP_PATH/app/files"
 
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
     -keyout /etc/ssl/private/misp.key \
-    -out /etc/ssl/certs/misp.crt \
+    -out    /etc/ssl/certs/misp.crt \
     -subj "/CN=192.168.50.100/O=RADIANT/C=US" 2>/dev/null
 
 cat > /etc/apache2/sites-available/misp.conf <<'CONF'
@@ -168,14 +180,13 @@ a2ensite misp
 a2enmod ssl rewrite headers
 systemctl restart apache2
 
-# ── Step 9: Bootstrap DB and set credentials ──────────────────────────────────
-echo "==> [9/9] Initialising database..."
+# ── 9. DB schema + credentials ────────────────────────────────────────────────
+echo "==> [9/9] Initialising database and credentials..."
 
 mysql -u "$MISP_DB_USER" -p"$MISP_DB_PASS" "$MISP_DB" \
-    < "$MISP_PATH/INSTALL/MYSQL.sql"
+    < "$MISP_PATH/INSTALL/MYSQL.sql" 2>/dev/null || true
 
 CAKE="$MISP_PATH/app/Console/cake"
-
 sudo -u www-data "$CAKE" Admin runUpdates
 sudo -u www-data "$CAKE" Admin setSetting "MISP.baseurl" "$MISP_BASEURL"
 sudo -u www-data "$CAKE" Admin setSetting "MISP.org"     "$MISP_ORG"
@@ -185,6 +196,7 @@ mysql -u root "$MISP_DB" \
     -e "UPDATE users SET email='${MISP_ADMIN_EMAIL}', change_pw=0 WHERE id=1;"
 sudo -u www-data "$CAKE" User changePw "$MISP_ADMIN_EMAIL" "$MISP_ADMIN_PASS"
 
+# ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "======================================================"
 echo "  MISP ready — Project RADIANT"
