@@ -17,7 +17,7 @@ fi
 
 echo "==> Downloading MISP installer..."
 wget -qO /tmp/INSTALL.sh \
-    https://raw.githubusercontent.com/MISP/MISP/2.4/INSTALL/INSTALL.sh
+    https://raw.githubusercontent.com/MISP/MISP/main/INSTALL/INSTALL.sh
 chmod +x /tmp/INSTALL.sh
 
 echo "==> Running MISP installer (~20 minutes)..."
