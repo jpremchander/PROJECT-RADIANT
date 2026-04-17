@@ -56,26 +56,28 @@ if [ -d "$MISP_PATH/.git" ]; then
 else
     rm -rf "$MISP_PATH"
     git clone -b 2.4 --depth 1 https://github.com/MISP/MISP.git "$MISP_PATH"
-    cd "$MISP_PATH"
-    git submodule update --init --recursive
 fi
 
+cd "$MISP_PATH"
+git submodule update --init --recursive
+
 # ── 5. PHP Composer ───────────────────────────────────────────────────────────
-echo "==> [5/9] Installing PHP dependencies..."
+echo "==> [5/9] Installing PHP dependencies (composer)..."
 cd "$MISP_PATH/app"
 if [ ! -f composer.phar ]; then
     wget -qO composer.phar https://getcomposer.org/download/latest-stable/composer.phar
 fi
-php composer.phar install --no-dev --no-interaction 2>/dev/null || true
+php -d memory_limit=-1 composer.phar install \
+    --no-dev --no-interaction --ignore-platform-reqs
 
 # ── 6. Python deps ────────────────────────────────────────────────────────────
 echo "==> [6/9] Installing Python dependencies..."
 if [ ! -d "$MISP_PATH/venv" ]; then
     python3 -m venv "$MISP_PATH/venv"
 fi
-"$MISP_PATH/venv/bin/pip" install -q PyMISP pyzmq redis 2>/dev/null || true
+"$MISP_PATH/venv/bin/pip" install -q PyMISP pyzmq redis
 
-# ── 7. Write config files directly ───────────────────────────────────────────
+# ── 7. Write config files ─────────────────────────────────────────────────────
 echo "==> [7/9] Writing MISP config files..."
 
 SALT=$(openssl rand -hex 32)
@@ -196,7 +198,6 @@ mysql -u root "$MISP_DB" \
     -e "UPDATE users SET email='${MISP_ADMIN_EMAIL}', change_pw=0 WHERE id=1;"
 sudo -u www-data "$CAKE" User changePw "$MISP_ADMIN_EMAIL" "$MISP_ADMIN_PASS"
 
-# ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "======================================================"
 echo "  MISP ready — Project RADIANT"
