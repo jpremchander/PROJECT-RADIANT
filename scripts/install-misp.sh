@@ -23,15 +23,30 @@ export DEBIAN_FRONTEND=noninteractive
 # ── 1. Packages ───────────────────────────────────────────────────────────────
 echo "==> [1/9] Installing packages..."
 apt-get update -qq
+apt-get install -y software-properties-common
+
+# PHP 8.x has a built-in Attribute class that conflicts with MISP's model.
+# PHP 7.4 (via ondrej PPA) is required.
+echo "==> Adding ondrej PHP PPA for PHP 7.4..."
+LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php
+apt-get update -qq
+
 apt-get install -y \
     apache2 mariadb-server redis-server \
     git curl wget openssl \
-    php8.3 php8.3-cli php8.3-common php8.3-mysql \
-    php8.3-xml php8.3-mbstring php8.3-curl php8.3-intl \
-    php8.3-bcmath php8.3-gd php8.3-zip \
-    php-redis libapache2-mod-php8.3 \
+    php7.4 php7.4-cli php7.4-common php7.4-mysql \
+    php7.4-xml php7.4-mbstring php7.4-curl php7.4-intl \
+    php7.4-bcmath php7.4-gd php7.4-zip php7.4-json \
+    php7.4-redis libapache2-mod-php7.4 \
     python3 python3-pip python3-venv python3-dev \
     libfuzzy-dev ssdeep
+
+# Disable PHP 8.x in Apache, enable 7.4
+a2dismod php8.3 2>/dev/null || true
+a2dismod php8.2 2>/dev/null || true
+a2dismod php8.1 2>/dev/null || true
+a2enmod php7.4
+update-alternatives --set php /usr/bin/php7.4 2>/dev/null || true
 
 # ── 2. MariaDB ────────────────────────────────────────────────────────────────
 echo "==> [2/9] Configuring MariaDB..."
