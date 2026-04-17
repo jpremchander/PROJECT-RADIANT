@@ -58,6 +58,7 @@ else
     git clone -b 2.4 --depth 1 https://github.com/MISP/MISP.git "$MISP_PATH"
 fi
 
+git config --global --add safe.directory "$MISP_PATH"
 cd "$MISP_PATH"
 git submodule update --init --recursive
 
