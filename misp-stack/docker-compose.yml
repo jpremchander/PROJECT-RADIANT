@@ -44,8 +44,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8090:80"
-      - "8445:443"
+      - "443:443"
     environment:
       MYSQL_HOST: db
       MYSQL_PORT: "3306"
