@@ -15,9 +15,11 @@ services:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 15
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - misp
 
   redis:
     image: redis:7-alpine
@@ -27,7 +29,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 10s
     restart: unless-stopped
+    networks:
+      - misp
 
   misp-core:
     image: ghcr.io/misp/misp-docker/misp-core:latest
@@ -47,7 +52,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-misp}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-misp}
       REDIS_FQDN: redis
-      MISP_BASEURL: ${MISP_BASEURL:-http://localhost:8090}
+      MISP_BASEURL: ${MISP_BASEURL:-http://192.168.50.100:8090}
       MISP_UUID: ${MISP_UUID:-}
       MISP_ORG: ${MISP_ORG:-RADIANT}
       MISP_HOST_ORG_ID: "1"
@@ -56,8 +61,10 @@ services:
       WORKERS: "1"
     volumes:
       - misp-data:/var/www/MISP/app/files
-      - misp-logs:/var/www/MISP/app/tmp/logs
+      - ../logs/misp:/var/www/MISP/app/tmp/logs
     restart: unless-stopped
+    networks:
+      - misp
 
   misp-modules:
     image: ghcr.io/misp/misp-docker/misp-modules:latest
@@ -70,8 +77,13 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - misp
+
+networks:
+  misp:
+    driver: bridge
 
 volumes:
   misp-db:
   misp-data:
-  misp-logs:
