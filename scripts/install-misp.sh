@@ -113,26 +113,34 @@ PHP
 
 cat > "$MISP_PATH/app/Config/config.php" <<PHP
 <?php
-class CONFIG {
-    public \$debug = 0;
-    public \$site_admin_debug = 0;
-    public \$Security = [
+\$config = array(
+    'debug' => 0,
+    'site_admin_debug' => 0,
+    'Security' => array(
         'level'      => 'medium',
         'salt'       => '${SALT}',
         'cipherSeed' => '${CIPHER}',
-    ];
-    public \$MISP = [
+    ),
+    'MISP' => array(
         'baseurl'     => '${MISP_BASEURL}',
         'uuid'        => '${UUID}',
         'org'         => '${MISP_ORG}',
         'host_org_id' => 1,
         'email'       => '${MISP_ADMIN_EMAIL}',
         'live'        => 1,
-    ];
-    public \$GnuPG = ['onlyencrypted' => false, 'bodyonlyencrypted' => false];
-    public \$Proxy = ['host' => null, 'port' => null, 'method' => null,
-                      'user' => null, 'password' => null];
-}
+    ),
+    'GnuPG' => array(
+        'onlyencrypted'     => false,
+        'bodyonlyencrypted' => false,
+    ),
+    'Proxy' => array(
+        'host'     => '',
+        'port'     => '',
+        'method'   => '',
+        'user'     => '',
+        'password' => '',
+    ),
+);
 PHP
 
 # ── 8. Permissions + Apache + SSL ─────────────────────────────────────────────
