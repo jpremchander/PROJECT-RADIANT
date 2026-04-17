@@ -2,7 +2,8 @@ name: project-radiant-misp
 
 services:
   db:
-    image: mariadb:10.11
+    # mirror.gcr.io is Google's read-through cache for Docker Hub (avoids Hub blocks)
+    image: mirror.gcr.io/library/mariadb:10.11
     container_name: misp-db
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-misp}
@@ -22,7 +23,7 @@ services:
       - misp
 
   redis:
-    image: redis:7-alpine
+    image: mirror.gcr.io/library/redis:7-alpine
     container_name: misp-redis
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
