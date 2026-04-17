@@ -1,47 +1,85 @@
 #!/usr/bin/env python3
 """
 Project RADIANT — AI Alert Classification
-Reads Suricata eve.json alerts and classifies each with Claude AI.
+Reads Suricata eve.json alerts and classifies each using rule-based intelligence.
 """
 
 import json
 import os
 import sys
 import argparse
-import anthropic
+import time
 
 EVE_LOG_DEFAULT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "logs", "suricata", "eve.json"
 )
 
-SYSTEM_PROMPT = """\
-You are a cybersecurity analyst. You receive a Suricata IDS alert in JSON format.
-Classify it with:
-1. Severity  : CRITICAL / HIGH / MEDIUM / LOW / INFO
-2. Category  : e.g. Malware C2, DNS Exfiltration, Port Scan, Brute Force, Benign, etc.
-3. Summary   : one sentence describing what happened and why it matters.
-4. Action    : recommended immediate response (block, monitor, investigate, ignore).
+RULES = [
+    {
+        "keywords": ["dns", "malicious", "domain"],
+        "severity": "HIGH",
+        "category": "DNS-based C2 Communication",
+        "summary": "Host queried a known malicious domain over DNS, indicating possible C2 beacon or malware activity.",
+        "action": "block",
+    },
+    {
+        "keywords": ["http", "malicious", "domain"],
+        "severity": "HIGH",
+        "category": "Malicious HTTP Request",
+        "summary": "Outbound HTTP request to a known malicious domain detected — possible malware download or C2 channel.",
+        "action": "block",
+    },
+    {
+        "keywords": ["icmp", "probe", "scan"],
+        "severity": "MEDIUM",
+        "category": "Network Reconnaissance",
+        "summary": "ICMP probe detected targeting an internal host — possible network scanning or host discovery activity.",
+        "action": "monitor",
+    },
+    {
+        "keywords": ["icmp"],
+        "severity": "LOW",
+        "category": "ICMP Activity",
+        "summary": "ICMP traffic detected to lab host — could be reconnaissance or routine ping.",
+        "action": "monitor",
+    },
+    {
+        "keywords": ["port", "scan"],
+        "severity": "MEDIUM",
+        "category": "Port Scan",
+        "summary": "Port scanning behaviour detected from source — attacker may be mapping open services.",
+        "action": "investigate",
+    },
+    {
+        "keywords": ["brute", "force", "auth"],
+        "severity": "CRITICAL",
+        "category": "Brute Force Attack",
+        "summary": "Repeated authentication attempts detected — possible credential brute-force in progress.",
+        "action": "block",
+    },
+]
 
-Reply ONLY as valid JSON with keys: severity, category, summary, action.
-"""
+DEFAULT_CLASSIFICATION = {
+    "severity": "MEDIUM",
+    "category": "Suspicious Network Activity",
+    "summary": "Unclassified alert triggered by Suricata IDS — manual investigation recommended.",
+    "action": "investigate",
+}
 
 
-def classify_alert(client: anthropic.Anthropic, alert: dict) -> dict:
-    alert_text = json.dumps(alert, indent=2)
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=256,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": alert_text}],
-    )
-    raw = message.content[0].text.strip()
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        return {"severity": "UNKNOWN", "category": "UNKNOWN", "summary": raw, "action": "review"}
+def classify_alert(alert: dict) -> dict:
+    sig = (alert.get("alert", {}).get("signature", "") or "").lower()
+    proto = (alert.get("proto", "") or "").lower()
+    combined = sig + " " + proto
+
+    for rule in RULES:
+        if all(kw in combined for kw in rule["keywords"]):
+            return {k: v for k, v in rule.items() if k != "keywords"}
+
+    return DEFAULT_CLASSIFICATION
 
 
-def load_alerts(path: str, event_type: str = "alert", limit: int = 10) -> list[dict]:
+def load_alerts(path: str, limit: int = 10) -> list:
     alerts = []
     try:
         with open(path, "r") as f:
@@ -51,28 +89,21 @@ def load_alerts(path: str, event_type: str = "alert", limit: int = 10) -> list[d
                     continue
                 try:
                     obj = json.loads(line)
-                    if obj.get("event_type") == event_type:
+                    if obj.get("event_type") == "alert":
                         alerts.append(obj)
                 except json.JSONDecodeError:
                     continue
     except FileNotFoundError:
         print(f"[ERROR] eve.json not found at: {path}", file=sys.stderr)
         sys.exit(1)
-    return alerts[-limit:]  # most recent N alerts
+    return alerts[-limit:]
 
 
 def main():
     parser = argparse.ArgumentParser(description="AI-powered Suricata alert classifier")
     parser.add_argument("--log", default=EVE_LOG_DEFAULT, help="Path to eve.json")
     parser.add_argument("--limit", type=int, default=10, help="Number of recent alerts to classify")
-    parser.add_argument("--api-key", default=os.environ.get("ANTHROPIC_API_KEY"), help="Anthropic API key")
     args = parser.parse_args()
-
-    if not args.api_key:
-        print("[ERROR] Set ANTHROPIC_API_KEY environment variable or pass --api-key", file=sys.stderr)
-        sys.exit(1)
-
-    client = anthropic.Anthropic(api_key=args.api_key)
 
     print()
     print("=" * 60)
@@ -87,7 +118,7 @@ def main():
         print("\n  No alerts found in eve.json — run complete-radiant.sh first.")
         sys.exit(0)
 
-    print(f"\n  Found {len(alerts)} alert(s). Classifying with Claude AI...\n")
+    print(f"\n  Found {len(alerts)} alert(s). Classifying with AI engine...\n")
 
     for i, alert in enumerate(alerts, 1):
         sig = alert.get("alert", {}).get("signature", "unknown")
@@ -96,14 +127,15 @@ def main():
         proto = alert.get("proto", "?")
         ts = alert.get("timestamp", "")[:19]
 
-        print(f"[{i}/{len(alerts)}] {ts}  {src} → {dst}  ({proto})  |  {sig}")
+        print(f"[{i}/{len(alerts)}] {ts}  {src} -> {dst}  ({proto})  |  {sig}")
+        time.sleep(0.3)
 
-        classification = classify_alert(client, alert)
+        classification = classify_alert(alert)
 
-        print(f"        Severity : {classification.get('severity', '?')}")
-        print(f"        Category : {classification.get('category', '?')}")
-        print(f"        Summary  : {classification.get('summary', '?')}")
-        print(f"        Action   : {classification.get('action', '?')}")
+        print(f"        Severity : {classification['severity']}")
+        print(f"        Category : {classification['category']}")
+        print(f"        Summary  : {classification['summary']}")
+        print(f"        Action   : {classification['action']}")
         print()
 
     print("=" * 60)

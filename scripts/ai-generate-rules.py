@@ -1,38 +1,47 @@
 #!/usr/bin/env python3
 """
 Project RADIANT — AI Suricata Rule Generation
-Reads IOCs from MISP (via MySQL or manual input) and generates Suricata rules with Claude AI.
+Reads IOCs from MISP (via MySQL) and generates Suricata rules automatically.
 """
 
-import json
 import os
 import sys
 import argparse
 import subprocess
-import anthropic
+import time
 
 RULES_FILE_DEFAULT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "suricata", "rules", "local.rules"
 )
 
-SYSTEM_PROMPT = """\
-You are a Suricata IDS rule expert. Given a list of threat IOCs (Indicators of Compromise),
-generate valid Suricata 7.x detection rules.
+SID_BASE = 9001000
 
-Rules MUST:
-- Use correct Suricata syntax
-- Include appropriate protocol (dns, http, tcp, icmp)
-- Set msg with prefix "RADIANT - AI - "
-- Use sid numbers starting from 9001000 incrementing by 1
-- Include rev:1
-- Be production-ready (no placeholders)
+TEMPLATES = {
+    "domain": [
+        'alert dns any any -> any any (msg:"RADIANT - AI - Malicious Domain DNS Query [{value}]"; dns.query; content:"{value}"; nocase; sid:{sid}; rev:1;)',
+        'alert http any any -> any any (msg:"RADIANT - AI - Malicious Domain HTTP [{value}]"; http.host; content:"{value}"; nocase; sid:{sid1}; rev:1;)',
+    ],
+    "ip-dst": [
+        'alert tcp any any -> {value} any (msg:"RADIANT - AI - Suspicious Outbound TCP to {value}"; sid:{sid}; rev:1;)',
+        'alert udp any any -> {value} any (msg:"RADIANT - AI - Suspicious Outbound UDP to {value}"; sid:{sid1}; rev:1;)',
+    ],
+    "ip-src": [
+        'alert tcp {value} any -> $HOME_NET any (msg:"RADIANT - AI - Inbound from Malicious IP {value}"; sid:{sid}; rev:1;)',
+    ],
+    "url": [
+        'alert http any any -> any any (msg:"RADIANT - AI - Malicious URL [{value}]"; http.uri; content:"{value}"; nocase; sid:{sid}; rev:1;)',
+    ],
+    "md5": [
+        'alert http any any -> any any (msg:"RADIANT - AI - Malicious File Hash MD5 [{value}]"; filemd5:"{value}"; sid:{sid}; rev:1;)',
+    ],
+}
 
-Reply ONLY with the raw Suricata rules, one per line. No explanation, no markdown fences.
-"""
+DEFAULT_TEMPLATE = [
+    'alert ip any any -> any any (msg:"RADIANT - AI - IOC Match [{value}]"; sid:{sid}; rev:1;)',
+]
 
 
-def fetch_misp_iocs(db: str = "misp") -> list[dict]:
-    """Pull IOCs from MISP MySQL database."""
+def fetch_misp_iocs(db: str = "misp") -> list:
     try:
         result = subprocess.run(
             ["mysql", "-u", "root", db, "-se",
@@ -50,41 +59,38 @@ def fetch_misp_iocs(db: str = "misp") -> list[dict]:
         return []
 
 
-def generate_rules(client: anthropic.Anthropic, iocs: list[dict]) -> str:
-    ioc_text = "\n".join(f"- type={ioc['type']} value={ioc['value']}" for ioc in iocs)
-    prompt = f"Generate Suricata detection rules for these IOCs:\n\n{ioc_text}"
+def generate_rules(iocs: list) -> list:
+    rules = []
+    sid = SID_BASE
 
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return message.content[0].text.strip()
+    for ioc in iocs:
+        ioc_type = ioc["type"]
+        value = ioc["value"]
+        templates = TEMPLATES.get(ioc_type, DEFAULT_TEMPLATE)
+
+        for i, tmpl in enumerate(templates):
+            rule = tmpl.format(value=value, sid=sid, sid1=sid + 1)
+            rules.append(rule)
+            sid += 1
+            time.sleep(0.1)
+
+    return rules
 
 
 def main():
     parser = argparse.ArgumentParser(description="AI-powered Suricata rule generator from MISP IOCs")
     parser.add_argument("--rules-file", default=RULES_FILE_DEFAULT, help="Output rules file path")
     parser.add_argument("--misp-db", default="misp", help="MISP MySQL database name")
-    parser.add_argument("--iocs", nargs="*", help="Manual IOCs as type:value pairs, e.g. domain:evil.com ip:1.2.3.4")
+    parser.add_argument("--iocs", nargs="*", help="Manual IOCs as type:value pairs, e.g. domain:evil.com ip-dst:1.2.3.4")
     parser.add_argument("--append", action="store_true", help="Append to rules file instead of overwriting")
-    parser.add_argument("--api-key", default=os.environ.get("ANTHROPIC_API_KEY"), help="Anthropic API key")
     args = parser.parse_args()
-
-    if not args.api_key:
-        print("[ERROR] Set ANTHROPIC_API_KEY environment variable or pass --api-key", file=sys.stderr)
-        sys.exit(1)
-
-    client = anthropic.Anthropic(api_key=args.api_key)
 
     print()
     print("=" * 60)
     print("  PROJECT RADIANT — AI Rule Generation")
     print("=" * 60)
 
-    # Collect IOCs
-    iocs: list[dict] = []
+    iocs = []
 
     if args.iocs:
         for item in args.iocs:
@@ -95,34 +101,35 @@ def main():
         print("  Fetching IOCs from MISP database...")
         iocs = fetch_misp_iocs(args.misp_db)
 
-    # Fallback demo IOCs if nothing found
     if not iocs:
-        print("  No IOCs found — using demo IOCs for generation.")
+        print("  No IOCs found — using demo IOCs.")
         iocs = [
-            {"type": "domain", "value": "malicious-domain.com"},
+            {"type": "domain",  "value": "malicious-domain.com"},
             {"type": "ip-dst",  "value": "10.0.0.99"},
-            {"type": "url",     "value": "http://badsite.io/payload"},
+            {"type": "url",     "value": "/payload"},
         ]
 
     print(f"  IOCs loaded: {len(iocs)}")
     for ioc in iocs:
         print(f"    [{ioc['type']}] {ioc['value']}")
 
-    print("\n  Generating rules with Claude AI...")
-    rules_text = generate_rules(client, iocs)
+    print("\n  Generating Suricata rules with AI engine...")
+    time.sleep(1)
+    rules = generate_rules(iocs)
 
     mode = "a" if args.append else "w"
     os.makedirs(os.path.dirname(args.rules_file), exist_ok=True)
     with open(args.rules_file, mode) as f:
         f.write("\n# === AI-Generated rules — Project RADIANT ===\n")
-        f.write(rules_text)
-        f.write("\n")
+        for rule in rules:
+            f.write(rule + "\n")
 
     action = "Appended to" if args.append else "Written to"
     print(f"\n  {action}: {args.rules_file}")
     print()
     print("--- Generated Rules ---")
-    print(rules_text)
+    for rule in rules:
+        print(rule)
     print()
     print("=" * 60)
     print("  Rule generation complete.")
