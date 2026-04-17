@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 # Project RADIANT — Local API key setup (gitignored, never pushed)
-export ANTHROPIC_API_KEY="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"
-echo "ANTHROPIC_API_KEY set."
+export key="KgO2xIbrTaGAvHt0qSVTLo3th5FlcHKK00I1EpJeAeyr5EP7aKFuI5pt_KIGX9dl4NBlOhbUKle6SerP6jF40Q-rfy8TwAA"
+echo "API key set."
