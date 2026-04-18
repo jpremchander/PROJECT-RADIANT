@@ -1,7 +1,6 @@
 # Advanced Threat Intelligence & Detection — Demonstration Script
 ## Project RADIANT | MISP + Suricata + AI
 
-> This document is the complete video demonstration script for Project RADIANT.
 > Each section includes what to show on screen, what to say, and commands to run.
 
 ---
