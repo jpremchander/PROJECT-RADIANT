@@ -4,14 +4,14 @@
 set -euo pipefail
 
 # ── Credentials ───────────────────────────────────────────────────────────────
-MISP_BASEURL="http://192.168.50.100"
+MISP_BASEURL="http://192.168.10.100"
 MISP_ORG="RADIANT"
 MISP_ADMIN_EMAIL="admin@radiant.local"
-MISP_ADMIN_PASS="Rad14nt@2024"
+MISP_ADMIN_PASS="Admin@1234"
 MISP_PATH="/var/www/MISP"
 MISP_DB="misp"
 MISP_DB_USER="misp"
-MISP_DB_PASS="misp_rad14nt_2024"
+MISP_DB_PASS="misp_rad14nt_2026"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Error: run as root — sudo bash scripts/install-misp.sh" >&2
