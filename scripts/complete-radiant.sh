@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MISP_URL="http://192.168.50.100"
+MISP_URL="http://192.168.10.100"
 MISP_DB="misp"
 RULES_FILE="$ROOT_DIR/suricata/rules/local.rules"
 FAST_LOG="$ROOT_DIR/logs/suricata/fast.log"
@@ -97,7 +97,7 @@ echo "==> [5/6] Simulating attack traffic..."
 sleep 3
 curl -s --max-time 5 http://malicious-domain.com -o /dev/null || true
 nslookup malicious-domain.com 8.8.8.8 || true
-ping -c 3 192.168.50.100 || true
+ping -c 3 192.168.10.100 || true
 echo "    Attack traffic sent."
 
 # ── Step 6: Show detection evidence ──────────────────────────────────────────
@@ -125,7 +125,7 @@ echo ""
 echo "======================================================"
 echo "  PROJECT RADIANT — Demo Complete"
 echo "======================================================"
-echo "  MISP Dashboard : http://192.168.50.100"
+echo "  MISP Dashboard : http://192.168.10.100"
 echo "  Email          : admin@radiant.lab"
 echo "  Password       : admin@1234"
 echo "  Fast log       : $FAST_LOG"
